@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,7 +40,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -68,7 +69,11 @@ fun DrawScreen(viewModel: SandSimViewModel) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
+//        Text(
+//            text = "Total Pixel Quantity: ${state.getTotalPixels()}   FPS: %.2f".format(
+//                state.currentFps
+//            )
+//        )
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -81,16 +86,36 @@ fun DrawScreen(viewModel: SandSimViewModel) {
                     }
                 }
         ) {
-            viewModel.setCenterCoordinates(this.size, this.center)
-            drawCircle(color = Color.Green, radius = 5f, center = Offset(state.dragOffsetX, state.dragOffsetY))
+            viewModel.initializePixels(size.width, size.height)
 
-            (state.pixelsOnLastPosition + state.pixels).forEach { pixel ->
+
+            state.getPositionWithDrawablePixels().forEach {
                 drawRect(
-                    color = Color.Yellow, // Change this to your desired pixel color
-                    size = Size(10f, 10f),
-                    topLeft = pixel.position // Specify the pixel position with x and y
+                    color = Color.Yellow,
+                    topLeft = Offset(it.first.toFloat(), it.second.toFloat()),
+                    size = Size(state.pixelSize, state.pixelSize)
                 )
             }
+
+            drawCircle(
+                color = Color.Red,
+                radius = 10f,
+                center = Offset(state.dragOffsetX, state.dragOffsetY)
+            )
+
+//            (state.pixelsOnLastPosition + state.pixels).forEach { pixel ->
+//                drawRect(
+//                    color = pixel.pixelColor, // Change this to your desired pixel color
+//                    size = Size(viewModel.pixelSize, viewModel.pixelSize),
+//                    topLeft = pixel.position // Specify the pixel position with x and y
+//                )
+//            }
+        }
+
+        Button(onClick = {
+//            viewModel.reset()
+        }) {
+            Text(text = "Reset")
         }
     }
 }
