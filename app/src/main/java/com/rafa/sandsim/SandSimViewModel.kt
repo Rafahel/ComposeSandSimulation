@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import kotlin.math.absoluteValue
 import kotlin.math.round
 
 data class PixelData(
@@ -88,16 +89,15 @@ class SandSimViewModel : ViewModel() {
                     )
                     pixels[pixels.indexOf(pixel)] = updatedPixel
                 }
-                pixelsOnFinalPosition.addAll(pixels.filter { it.hasReachFinalPosition }
-                    .distinctBy { it.position })
-                pixels.removeAll { it.hasReachFinalPosition }
+
 
 //                getState().dragOffsetX = 0f // Remove this to keep moving x after
                 delay(5)
 //                transformPixelToLine()
                 val newState = getState().copy(
-                    pixels = pixels.toList().distinct(),
-                    pixelsOnFinalPosition = pixelsOnFinalPosition.toList().distinct(),
+                    pixels = pixels.filter { !it.hasReachFinalPosition }.toList().distinct(),
+                    pixelsOnFinalPosition = pixelsOnFinalPosition.apply { addAll(pixels.filter { it.hasReachFinalPosition }) }
+                        .distinct(),
                     fps = getCurrentFps(startTime)
                 )
                 updateState(newState)
@@ -125,9 +125,13 @@ class SandSimViewModel : ViewModel() {
     }
 
     private fun hasCollisionBellow(pixel: PixelData): Boolean {
-        val pixelsOnFinalPosition = getState().pixelsOnFinalPosition
+        return getCollidingPixel(pixel) != null
+    }
+
+    private fun getCollidingPixel(pixel: PixelData) = getState().pixelsOnFinalPosition.firstOrNull {
         val nextPixelYPosition = pixel.position.y + getState().pixelSize
-        return pixelsOnFinalPosition.any { it.position.x == pixel.position.x && it.position.y <= nextPixelYPosition }
+        it.position.y <= nextPixelYPosition &&
+                (it.position.x - pixel.position.x).absoluteValue < getState().pixelSize
     }
 
     //540 646
