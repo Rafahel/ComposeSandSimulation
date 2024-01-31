@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.Random
 import kotlin.math.absoluteValue
 import kotlin.math.round
+import kotlin.math.roundToInt
 
 data class PixelData(
     val position: Offset, val hasReachFinalPosition: Boolean = false
@@ -32,7 +34,8 @@ data class CanvasState(
     val aimPosition: Offset = Offset(0f, 0f),
     val pixelSize: Float = 10f,
     val lines: List<LineData> = emptyList(),
-    val fps: Float = 0f
+    val fps: Float = 0f,
+    val isSimulationPaused: Boolean = false
 ) {
     fun getCurrentPixels() = (pixels + pixelsOnFinalPosition).size
 }
@@ -47,44 +50,56 @@ class SandSimViewModel : ViewModel() {
         var lastGeneratedPixelTime = Instant.now().toEpochMilli()
         updateJob = viewModelScope.launch {
             while (true) {
+                if (getState().isSimulationPaused) {
+                    delay(1000)
+                    continue
+                }
                 val startTime = Instant.now().toEpochMilli()
                 val pixels = getState().pixels.toMutableList()
                 val pixelsOnFinalPosition: MutableList<PixelData> =
                     getState().pixelsOnFinalPosition.toMutableList()
                 val pixelsToBeRemoved = mutableListOf<PixelData>()
                 if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
-                    val newPixel = PixelData(
-                        position = Offset(
-                            x = getState().aimPosition.x, y = getState().aimPosition.y
-                        ),
-                    )
-                    if (pixels.none { it.position == newPixel.position }) {
-                        pixels.add(newPixel)
+                    val shouldDrop = getState().aimPosition.x % getState().pixelSize == 0f
+                    if (shouldDrop) {
+                        val newPixel = PixelData(
+                            position = Offset(
+                                x = getState().aimPosition.x, y = getState().aimPosition.y
+                            ),
+                        )
+                        if (pixels.none { it.position == newPixel.position }) {
+                            pixels.add(newPixel)
+                        }
+                        lastGeneratedPixelTime = Instant.now().toEpochMilli()
                     }
-                    lastGeneratedPixelTime = Instant.now().toEpochMilli()
                 }
 
                 pixels.forEach { pixel ->
                     var hasReachFinalPosition = false
 
-                    val newYPosition = when {
-                        hasCollisionBellow(pixel) -> {
-                            hasReachFinalPosition = true
-                            pixel.position.y
+                    val newPosition = when {
+                        hasCollisionBellow(pixel.position) -> {
+                            val nextXPosition = slipSideways(pixel.position)
+                            if (nextXPosition != null) {
+                                Offset(pixel.position.x + nextXPosition, pixel.position.y)
+
+                            } else {
+                                hasReachFinalPosition = true
+                                Offset(pixel.position.x, pixel.position.y)
+                            }
                         }
 
                         hasReachedTheGround(pixel) -> {
                             hasReachFinalPosition = true
-                            getState().size.height - getState().pixelSize
+                            Offset(pixel.position.x, getState().size.height - getState().pixelSize)
                         }
 
                         else -> {
-                            pixel.position.y + 1
+                            Offset(pixel.position.x, pixel.position.y + 1)
                         }
                     }
-                    val newXPosition = pixel.position.x
                     val updatedPixel = pixel.copy(
-                        position = Offset(x = newXPosition, y = newYPosition),
+                        position = newPosition,
                         hasReachFinalPosition = hasReachFinalPosition
                     )
                     pixels[pixels.indexOf(pixel)] = updatedPixel
@@ -92,7 +107,7 @@ class SandSimViewModel : ViewModel() {
 
 
 //                getState().dragOffsetX = 0f // Remove this to keep moving x after
-                delay(5)
+                delay(1)
 //                transformPixelToLine()
                 val newState = getState().copy(
                     pixels = pixels.filter { !it.hasReachFinalPosition }.toList().distinct(),
@@ -103,6 +118,74 @@ class SandSimViewModel : ViewModel() {
                 updateState(newState)
             }
         }
+    }
+
+    private fun slipSideways(pixelPosition: Offset): Float? {
+        val collidingPixel = getCollidingPixel(pixelPosition)!!
+        val collidingPixelPosition = collidingPixel.position
+        val pixelsOnFinalPosition = getState().pixelsOnFinalPosition
+        val hasPixelOnTheRightSide =
+            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize }
+        val hasPixelOnTheLeftSide =
+            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize }
+        val hasPixelOnTheLeftBottom =
+            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
+        val hasPixelOnTheRightBottom =
+            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
+        val random = Random(System.nanoTime())
+
+        // TODO verificar todas as possibilidades
+//        return when {
+//            pixelPosition.x == collidingPixelPosition.x && hasPixelOnTheRightBottom -> null
+//            pixelPosition.x == collidingPixelPosition.x -> {
+//                val isPixelGoingRight = if (!hasPixelOnTheRightBottom && !hasPixelOnTheLeftBottom) {
+//                    random.nextBoolean()
+//                } else {
+//                    false
+//                }
+//
+//                if (isPixelGoingRight) {
+//                    if (hasPixelOnTheRightBottom) {
+//                        null
+//                    } else {
+//                        10f
+//                    }
+//                } else {
+//                    if (hasPixelOnTheLeftBottom) {
+//                        null
+//                    } else {
+//                        -10f
+//                    }
+//                }
+//
+//            }
+//
+//            else -> null
+//        }
+
+        val shouldGoToRandomXPosition =  pixelPosition.x == collidingPixelPosition.x && !hasPixelOnTheLeftBottom && !hasPixelOnTheRightBottom
+
+        // Working for the right side
+        return when {
+            shouldGoToRandomXPosition -> {
+                if (random.nextBoolean()) {
+                    10f
+                } else {
+                    -10f
+                }
+            }
+            hasPixelOnTheRightBottom && hasPixelOnTheLeftBottom -> {
+                null
+            }
+            !hasPixelOnTheLeftBottom -> -10f
+            !hasPixelOnTheRightBottom -> 10f
+
+            else -> -110f
+        }
+
+
+
+
     }
 
     private fun hasReachedTheGround(pixel: PixelData) =
@@ -124,21 +207,25 @@ class SandSimViewModel : ViewModel() {
         }
     }
 
-    private fun hasCollisionBellow(pixel: PixelData): Boolean {
-        return getCollidingPixel(pixel) != null
+    private fun hasCollisionBellow(pixelPosition: Offset): Boolean {
+        return getCollidingPixel(pixelPosition) != null
     }
 
-    private fun getCollidingPixel(pixel: PixelData) = getState().pixelsOnFinalPosition.firstOrNull {
-        val nextPixelYPosition = pixel.position.y + getState().pixelSize
-        it.position.y <= nextPixelYPosition &&
-                (it.position.x - pixel.position.x).absoluteValue < getState().pixelSize
-    }
+    private fun getCollidingPixel(pixelPosition: Offset) =
+        getState().pixelsOnFinalPosition.firstOrNull {
+            val nextPixelYPosition = pixelPosition.y + getState().pixelSize
+            it.position.y <= nextPixelYPosition &&
+                    (it.position.x - pixelPosition.x).absoluteValue < getState().pixelSize
+        }
 
     //540 646
     fun updateDragValues(offsetX: Float, offsetY: Float) {
+        val isLeftDrag = offsetX < 0
+        val xValueToAdd = if (isLeftDrag) (getState().pixelSize * -1f) else getState().pixelSize
         val currentState = getState()
-        val newXPosition = currentState.aimPosition.x + offsetX
-        val newYPosition = currentState.aimPosition.y + offsetY
+        val newXPosition =
+            (currentState.aimPosition.x + xValueToAdd + offsetX).roundToInt().toFloat()
+        val newYPosition = currentState.aimPosition.y.roundToInt() + offsetY
         if (newXPosition > currentState.size.width * currentState.pixelSize || newXPosition < 0) return
         if (newYPosition > currentState.size.height * currentState.pixelSize || newYPosition < 0) return
         val newState = currentState.copy(aimPosition = Offset(newXPosition, newYPosition))
@@ -153,6 +240,11 @@ class SandSimViewModel : ViewModel() {
     fun resetCanvas() {
         updateJob?.cancel()
         val newState = CanvasState()
+        updateState(newState)
+    }
+
+    fun pauseSimulation() {
+        val newState = getState().copy(isSimulationPaused = !getState().isSimulationPaused)
         updateState(newState)
     }
 }
