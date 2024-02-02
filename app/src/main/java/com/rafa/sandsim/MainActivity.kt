@@ -161,7 +161,7 @@ fun DrawScreen(viewModel: SandSimViewModel) {
                 center = Offset(state.aimPosition.x, state.aimPosition.y)
             )
 
-            (state.pixelsOnFinalPosition + state.pixels).forEach { pixel ->
+            (state.getAllPixels()).forEach { pixel ->
                 drawRect(
                     color = pixel.color, // Change this to your desired pixel color
                     size = Size(state.pixelSize, state.pixelSize),

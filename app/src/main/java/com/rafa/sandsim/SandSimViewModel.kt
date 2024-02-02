@@ -18,9 +18,17 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 
 data class PixelData(
-    val position: Offset, val hasReachFinalPosition: Boolean = false
+    val position: Offset,
+    val hasReachFinalPosition: Boolean = false,
+    val canCollideWIthOtherPixels: Boolean = true
 ) {
-    val color: Color = if (hasReachFinalPosition) Color.Red else Color.Yellow
+    val color = if (canCollideWIthOtherPixels && hasReachFinalPosition) {
+        Color.Green
+    } else if (hasReachFinalPosition) {
+        Color.Red
+    } else {
+        Color.Yellow
+    }
 }
 
 data class LineData(
@@ -30,6 +38,7 @@ data class LineData(
 data class CanvasState(
     val pixels: List<PixelData> = emptyList(),
     val pixelsOnFinalPosition: List<PixelData> = emptyList(),
+    val notCollidablePixels: List<PixelData> = emptyList(),
     val size: Size = Size(0f, 0f),
     val aimPosition: Offset = Offset(0f, 0f),
     val pixelSize: Float = 10f,
@@ -37,7 +46,8 @@ data class CanvasState(
     val fps: Float = 0f,
     val isSimulationPaused: Boolean = false
 ) {
-    fun getCurrentPixels() = (pixels + pixelsOnFinalPosition).size
+    fun getCurrentPixels() = getAllPixels().size
+    fun getAllPixels() = pixels + pixelsOnFinalPosition + notCollidablePixels
 }
 
 class SandSimViewModel : ViewModel() {
@@ -58,7 +68,6 @@ class SandSimViewModel : ViewModel() {
                 val pixels = getState().pixels.toMutableList()
                 val pixelsOnFinalPosition: MutableList<PixelData> =
                     getState().pixelsOnFinalPosition.toMutableList()
-                val pixelsToBeRemoved = mutableListOf<PixelData>()
                 if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
                     val shouldDrop = getState().aimPosition.x % getState().pixelSize == 0f
                     if (shouldDrop) {
@@ -98,95 +107,108 @@ class SandSimViewModel : ViewModel() {
                             Offset(pixel.position.x, pixel.position.y + 1)
                         }
                     }
+
                     val updatedPixel = pixel.copy(
                         position = newPosition,
-                        hasReachFinalPosition = hasReachFinalPosition
+                        hasReachFinalPosition = hasReachFinalPosition,
                     )
                     pixels[pixels.indexOf(pixel)] = updatedPixel
                 }
-
-
-//                getState().dragOffsetX = 0f // Remove this to keep moving x after
                 delay(1)
-//                transformPixelToLine()
-                val newState = getState().copy(
-                    pixels = pixels.filter { !it.hasReachFinalPosition }.toList().distinct(),
-                    pixelsOnFinalPosition = pixelsOnFinalPosition.apply { addAll(pixels.filter { it.hasReachFinalPosition }) }
-                        .distinct(),
-                    fps = getCurrentFps(startTime)
-                )
-                updateState(newState)
+                updatePixelsOnState(pixelsOnFinalPosition, pixels, startTime)
             }
         }
+    }
+
+    private fun updatePixelsOnState(
+        pixelsOnFinalPosition: MutableList<PixelData>,
+        pixels: MutableList<PixelData>,
+        startTime: Long
+    ) {
+        pixelsOnFinalPosition.addAll(pixels.filter { it.hasReachFinalPosition })
+        val nonCollidable = pixelsOnFinalPosition.filter { !canCollideWithOtherPixels(it.position) }
+        val updatedNonCollidablePixels =
+            getState().notCollidablePixels + nonCollidable.map { it.copy(canCollideWIthOtherPixels = false) }
+                .distinct()
+        val updatedPixelsOnLastPosition =
+            pixelsOnFinalPosition.distinct().toMutableList().apply { removeAll(nonCollidable) }
+        val updatedPixels = pixels.filter { !it.hasReachFinalPosition }.toList().distinct()
+        val newState = getState().copy(
+            pixels = updatedPixels,
+            pixelsOnFinalPosition = updatedPixelsOnLastPosition,
+            notCollidablePixels = updatedNonCollidablePixels,
+            fps = getCurrentFps(startTime)
+        )
+        updateState(newState)
     }
 
     private fun slipSideways(pixelPosition: Offset): Float? {
         val collidingPixel = getCollidingPixel(pixelPosition)!!
         val collidingPixelPosition = collidingPixel.position
-        val pixelsOnFinalPosition = getState().pixelsOnFinalPosition
-        val hasPixelOnTheRightSide =
-            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize }
-        val hasPixelOnTheLeftSide =
-            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize }
-        val hasPixelOnTheLeftBottom =
-            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
-        val hasPixelOnTheRightBottom =
-            pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
+        val hasPixelOnTheLeftBottom = hasPixelOnTheLeftBottom(pixelPosition)
+        val hasPixelOnTheRightBottom = getHasPixelOnTheRightBottom(pixelPosition)
         val random = Random(System.nanoTime())
+        val shouldGoToRandomXPosition =
+            pixelPosition.x == collidingPixelPosition.x && !hasPixelOnTheLeftBottom && !hasPixelOnTheRightBottom
 
-        // TODO verificar todas as possibilidades
-//        return when {
-//            pixelPosition.x == collidingPixelPosition.x && hasPixelOnTheRightBottom -> null
-//            pixelPosition.x == collidingPixelPosition.x -> {
-//                val isPixelGoingRight = if (!hasPixelOnTheRightBottom && !hasPixelOnTheLeftBottom) {
-//                    random.nextBoolean()
-//                } else {
-//                    false
-//                }
-//
-//                if (isPixelGoingRight) {
-//                    if (hasPixelOnTheRightBottom) {
-//                        null
-//                    } else {
-//                        10f
-//                    }
-//                } else {
-//                    if (hasPixelOnTheLeftBottom) {
-//                        null
-//                    } else {
-//                        -10f
-//                    }
-//                }
-//
-//            }
-//
-//            else -> null
-//        }
-
-        val shouldGoToRandomXPosition =  pixelPosition.x == collidingPixelPosition.x && !hasPixelOnTheLeftBottom && !hasPixelOnTheRightBottom
-
-        // Working for the right side
         return when {
             shouldGoToRandomXPosition -> {
                 if (random.nextBoolean()) {
-                    10f
+                    getState().pixelSize
                 } else {
-                    -10f
+                    -getState().pixelSize
                 }
             }
+
             hasPixelOnTheRightBottom && hasPixelOnTheLeftBottom -> {
                 null
             }
-            !hasPixelOnTheLeftBottom -> -10f
-            !hasPixelOnTheRightBottom -> 10f
 
-            else -> -110f
+            !hasPixelOnTheLeftBottom -> -getState().pixelSize
+            else -> getState().pixelSize
         }
-
-
-
-
     }
+
+    private fun canCollideWithOtherPixels(newPosition: Offset): Boolean {
+        return !(hasPixelOnTop(newPosition) && hasPixelOnTopLeft(newPosition) && hasPixelOnTopRight(
+            newPosition
+        ))
+    }
+
+    private fun hasPixelOnTopRight(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == (pixelPosition.x + getState().pixelSize) && it.position.y == pixelPosition.y - getState().pixelSize }
+
+    private fun hasPixelOnTopLeft(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == (pixelPosition.x - getState().pixelSize) && it.position.y == pixelPosition.y - getState().pixelSize }
+
+    private fun hasPixelOnTop(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x && it.position.y == pixelPosition.y - getState().pixelSize }
+
+    private fun getHasPixelOnTheRightSide(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize }
+
+    private fun hasPixelOnTheLeftSide(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize }
+
+    private fun getHasPixelOnTheRightBottom(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
+
+    private fun hasPixelOnTheLeftBottom(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize && it.position.y == pixelPosition.y + getState().pixelSize }
 
     private fun hasReachedTheGround(pixel: PixelData) =
         (pixel.position.y + 1) >= (getState().size.height - getState().pixelSize)
@@ -214,8 +236,7 @@ class SandSimViewModel : ViewModel() {
     private fun getCollidingPixel(pixelPosition: Offset) =
         getState().pixelsOnFinalPosition.firstOrNull {
             val nextPixelYPosition = pixelPosition.y + getState().pixelSize
-            it.position.y <= nextPixelYPosition &&
-                    (it.position.x - pixelPosition.x).absoluteValue < getState().pixelSize
+            it.position.y <= nextPixelYPosition && (it.position.x - pixelPosition.x).absoluteValue < getState().pixelSize
         }
 
     //540 646
