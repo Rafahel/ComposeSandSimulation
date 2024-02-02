@@ -127,8 +127,8 @@ fun DrawScreen(viewModel: SandSimViewModel) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(250.dp)
-                .background(Color.Gray)
+                .height(400.dp)
+                .background(Color.DarkGray)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
@@ -215,12 +215,12 @@ fun DrawScreen(viewModel: SandSimViewModel) {
                     Text(text = "Pause")
                 }
             }
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = "Pixels not on final: ${state.pixels.size}")
                 Text(text = "Pixels on final ${state.pixelsOnFinalPosition.size}")
+                Text(text = "Pixels that cant collide ${state.notCollidablePixels.size}")
             }
         }
     }

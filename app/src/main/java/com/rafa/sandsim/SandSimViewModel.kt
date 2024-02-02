@@ -74,7 +74,7 @@ class SandSimViewModel : ViewModel() {
                         val newPixel = PixelData(
                             position = Offset(
                                 x = getState().aimPosition.x, y = getState().aimPosition.y
-                            ),
+                            )
                         )
                         if (pixels.none { it.position == newPixel.position }) {
                             pixels.add(newPixel)
@@ -84,38 +84,51 @@ class SandSimViewModel : ViewModel() {
                 }
 
                 pixels.forEach { pixel ->
-                    var hasReachFinalPosition = false
-
-                    val newPosition = when {
-                        hasCollisionBellow(pixel.position) -> {
-                            val nextXPosition = slipSideways(pixel.position)
-                            if (nextXPosition != null) {
-                                Offset(pixel.position.x + nextXPosition, pixel.position.y)
-
-                            } else {
-                                hasReachFinalPosition = true
-                                Offset(pixel.position.x, pixel.position.y)
-                            }
-                        }
-
-                        hasReachedTheGround(pixel) -> {
-                            hasReachFinalPosition = true
-                            Offset(pixel.position.x, getState().size.height - getState().pixelSize)
-                        }
-
-                        else -> {
-                            Offset(pixel.position.x, pixel.position.y + 1)
-                        }
-                    }
-
-                    val updatedPixel = pixel.copy(
-                        position = newPosition,
-                        hasReachFinalPosition = hasReachFinalPosition,
-                    )
+                    val updatedPixel = updatePixelPosition(pixel)
                     pixels[pixels.indexOf(pixel)] = updatedPixel
                 }
                 delay(1)
                 updatePixelsOnState(pixelsOnFinalPosition, pixels, startTime)
+            }
+        }
+    }
+
+    private fun updatePixelPosition(pixel: PixelData): PixelData {
+        return when {
+            hasCollisionBellow(pixel.position) -> {
+                val nextXPosition = slipSideways(pixel.position)
+                if (nextXPosition != null) {
+                    pixel.copy(
+                        position = Offset(pixel.position.x + nextXPosition, pixel.position.y)
+                    )
+
+                } else {
+                    pixel.copy(
+                        position = Offset(pixel.position.x, pixel.position.y),
+                        hasReachFinalPosition = true
+
+                    )
+
+                }
+            }
+
+            hasReachedTheGround(pixel) -> {
+                pixel.copy(
+                    position = Offset(
+                        pixel.position.x, getState().size.height - getState().pixelSize
+                    ), hasReachFinalPosition = true
+
+                )
+
+            }
+
+            else -> {
+                pixel.copy(
+                    position = Offset(pixel.position.x, pixel.position.y + 1),
+                    hasReachFinalPosition = false
+
+                )
+
             }
         }
     }
@@ -152,6 +165,7 @@ class SandSimViewModel : ViewModel() {
             pixelPosition.x == collidingPixelPosition.x && !hasPixelOnTheLeftBottom && !hasPixelOnTheRightBottom
 
         return when {
+            hasPixelOnTopRight(pixelPosition) && hasPixelOnTopRight(pixelPosition) -> null
             shouldGoToRandomXPosition -> {
                 if (random.nextBoolean()) {
                     getState().pixelSize
@@ -190,16 +204,6 @@ class SandSimViewModel : ViewModel() {
     ) =
         getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x && it.position.y == pixelPosition.y - getState().pixelSize }
 
-    private fun getHasPixelOnTheRightSide(
-        pixelPosition: Offset
-    ) =
-        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x + getState().pixelSize }
-
-    private fun hasPixelOnTheLeftSide(
-        pixelPosition: Offset
-    ) =
-        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x - getState().pixelSize }
-
     private fun getHasPixelOnTheRightBottom(
         pixelPosition: Offset
     ) =
@@ -222,7 +226,7 @@ class SandSimViewModel : ViewModel() {
     fun initializePixels(size: Size, center: Offset) {
         if (getState().size.width == 0f) {
             val newState = CanvasState(
-                size = size, aimPosition = center
+                size = size, aimPosition = Offset(x = center.x, y = 0f)
             )
             updateState(newState)
             update()
@@ -242,10 +246,10 @@ class SandSimViewModel : ViewModel() {
     //540 646
     fun updateDragValues(offsetX: Float, offsetY: Float) {
         val isLeftDrag = offsetX < 0
-        val xValueToAdd = if (isLeftDrag) (getState().pixelSize * -1f) else getState().pixelSize
         val currentState = getState()
+        val currentXPosition = currentState.aimPosition.x
         val newXPosition =
-            (currentState.aimPosition.x + xValueToAdd + offsetX).roundToInt().toFloat()
+            if (isLeftDrag) currentXPosition - getState().pixelSize else currentXPosition + getState().pixelSize
         val newYPosition = currentState.aimPosition.y.roundToInt() + offsetY
         if (newXPosition > currentState.size.width * currentState.pixelSize || newXPosition < 0) return
         if (newYPosition > currentState.size.height * currentState.pixelSize || newYPosition < 0) return
