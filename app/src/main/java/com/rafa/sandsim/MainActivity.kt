@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,8 +48,7 @@ class MainActivity : ComponentActivity() {
             SandSimTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
                 ) {
                     DrawScreen(viewModel)
                 }
@@ -57,35 +57,37 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun DrawScreen(viewModel: SandSimViewModel) {
     val state by viewModel.state.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val startDrawingTime = Instant.now().toEpochMilli()
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .background(Color.DarkGray)
-                .pointerInput(Unit) {
-
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        viewModel.updateDragValues(dragAmount.x, dragAmount.y)
-                    }
+        Canvas(modifier = Modifier
+            .fillMaxWidth()
+            .height(400.dp)
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectDragGestures { change, _ ->
+                    viewModel.updateDragValues(change.position)
                 }
-        ) {
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    viewModel.updateDragValues(it)
+                })
+            }) {
             viewModel.initializePixels(this.size, this.center)
             drawCircle(
                 color = Color.Green,
-                radius = 5f,
-                center = Offset(state.aimPosition.x, state.aimPosition.y)
+                radius = 30f,
+                center = Offset(state.aimPosition.x, state.aimPosition.y),
+                style = Stroke(width = 3f)
             )
 
             if (state.pixelsOnFinalPosition.isNotEmpty()) {
@@ -108,12 +110,11 @@ fun DrawScreen(viewModel: SandSimViewModel) {
                 }
             }
 
-
             for (i in 0 until state.getAllPixels().size) {
                 drawRect(
-                    color = state.getAllPixels()[i].color, // Change this to your desired pixel color
+                    color = state.getAllPixels()[i].getColor(state.useDebugColors),
                     size = Size(state.pixelSize, state.pixelSize),
-                    topLeft = state.getAllPixels()[i].position // Specify the pixel position with x and y
+                    topLeft = state.getAllPixels()[i].position
                 )
             }
             val endDrawingTime = Instant.now().toEpochMilli()
@@ -131,51 +132,15 @@ fun DrawScreen(viewModel: SandSimViewModel) {
             }
         })
 
-
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = "Pixel Quantity: ${state.getCurrentPixels()}")
                 Text(text = "FPS: ${state.fps}")
             }
-//            Column(
-//                horizontalAlignment = Alignment.CenterHorizontally,
-//                verticalArrangement = Arrangement.Center
-//            ) {
-//                IconButton(onClick = { /*TODO*/ }) {
-//                    Icon(
-//                        imageVector = Icons.Filled.KeyboardArrowUp,
-//                        contentDescription = "KeyboardArrowUp"
-//                    )
-//                }
-//                Row {
-//                    IconButton(onClick = { /*TODO*/ }, interactionSource = interactionSource) {
-//                        Icon(
-//                            imageVector = Icons.Filled.KeyboardArrowLeft,
-//                            contentDescription = "KeyboardArrowLeft"
-//                        )
-//                    }
-//                    Spacer(modifier = Modifier.width(20.dp))
-//                    IconButton(onClick = { /*TODO*/ }) {
-//                        Icon(
-//                            imageVector = Icons.Filled.KeyboardArrowRight,
-//                            contentDescription = "KeyboardArrowRight"
-//                        )
-//                    }
-//                }
-//                IconButton(onClick = { /*TODO*/ }) {
-//                    Icon(
-//                        imageVector = Icons.Filled.KeyboardArrowDown,
-//                        contentDescription = "KeyboardArrowDown"
-//                    )
-//                }
-//            }
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center
             ) {
                 Button(onClick = { viewModel.resetCanvas() }) {
                     Text(text = "Reset")
@@ -183,6 +148,10 @@ fun DrawScreen(viewModel: SandSimViewModel) {
                 Spacer(modifier = Modifier.width(16.dp))
                 Button(onClick = { viewModel.pauseSimulation() }) {
                     Text(text = "Pause")
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = { viewModel.drawPixelFloor() }) {
+                    Text(text = "Debug Colors")
                 }
             }
             Column(
