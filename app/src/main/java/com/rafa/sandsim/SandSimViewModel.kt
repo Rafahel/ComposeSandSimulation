@@ -5,16 +5,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.util.fastDistinctBy
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.Random
-import kotlin.math.absoluteValue
 import kotlin.math.round
 
 data class PixelData(
@@ -23,7 +19,7 @@ data class PixelData(
     val canCollideWIthOtherPixels: Boolean = true
 ) {
     val color = if (canCollideWIthOtherPixels && hasReachFinalPosition) {
-        Color.Green
+        Color.Transparent
     } else if (hasReachFinalPosition) {
         Color.Red
     } else {
@@ -39,15 +35,16 @@ data class CanvasState(
     val pixels: List<PixelData> = emptyList(),
     val pixelsOnFinalPosition: List<PixelData> = emptyList(),
     val notCollidablePixels: List<PixelData> = emptyList(),
-    val size: Size = Size(0f, 0f),
+    val size: Size = Size(1f, 1f),
     val aimPosition: Offset = Offset(0f, 0f),
     val pixelSize: Float = 10f,
     val lines: List<LineData> = emptyList(),
     val fps: Float = 0f,
-    val isSimulationPaused: Boolean = false
+    val isSimulationPaused: Boolean = false,
+    val isInitialized: Boolean = false
 ) {
     fun getCurrentPixels() = getAllPixels().size
-    fun getAllPixels() = notCollidablePixels + pixelsOnFinalPosition + pixels
+    fun getAllPixels() = pixelsOnFinalPosition + pixels
 }
 
 class SandSimViewModel : ViewModel() {
@@ -58,7 +55,9 @@ class SandSimViewModel : ViewModel() {
 
     private var lastGeneratedPixelTime = Instant.now().toEpochMilli()
 
-    suspend fun update() {
+    val sandColors = listOf(Color(0xFFFFEC98), Color(0xFFF1C173), Color(0xFFF9A825))
+
+    fun update() {
         if (getState().isSimulationPaused) {
             return
         }
@@ -67,20 +66,12 @@ class SandSimViewModel : ViewModel() {
         val pixelsOnFinalPosition: MutableList<PixelData> =
             getState().pixelsOnFinalPosition.toMutableList()
         if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
-            val shouldDrop = getState().aimPosition.x % getState().pixelSize == 0f
-            if (shouldDrop) {
-                val pixelSize = getState().pixelSize
-                val newPixelsList = generatePixels()
-
-                val newPixel = PixelData(
-                    position = Offset(
-                        x = getState().aimPosition.x, y = getState().aimPosition.y
-                    )
-                )
-
-                pixels.add(newPixel)
-                lastGeneratedPixelTime = Instant.now().toEpochMilli()
+            val newPixelsList = generatePixels()
+            if (newPixelsList.none { isBellowAPixelOnFinalPosition(it.position) }) {
+                pixels.addAll(newPixelsList)
             }
+
+            lastGeneratedPixelTime = Instant.now().toEpochMilli()
         }
 
         pixels = pixels.distinct().toMutableList()
@@ -89,23 +80,17 @@ class SandSimViewModel : ViewModel() {
             val updatedPixel = updatePixelPosition(pixel)
             pixels[pixels.indexOf(pixel)] = updatedPixel
         }
+        pixels.removeAll { isBellowAPixelOnFinalPosition(it.position) }
         updatePixelsOnState(pixelsOnFinalPosition, pixels, startTime)
     }
 
-    private fun generatePixels(): List<PixelData> {
-        val possiblePositions = mutableListOf<PixelData>()
+    private fun generatePixels(quantity: Int = 10): List<PixelData> {
+        val generatedPixels = mutableListOf<PixelData>()
         val currentPosition = getState().aimPosition
         var currentXPosition = currentPosition.x
         var currentYPosition = currentPosition.y
-        var highestPosition = -1f
-        var currentlyFallingPixels = emptyList<PixelData>()
-
-        for (i in 0 until 16) {
-            if (getState().pixels.size >= 5) {
-                currentlyFallingPixels = getState().pixels.takeLast(5)
-                highestPosition =
-                    currentlyFallingPixels.map { it.position }.sortedBy { it.y }.first().y
-            }
+        if (quantity == 1) return listOf(PixelData(position = getState().aimPosition))
+        for (i in 0 until quantity + 6) {
             if (i != 0 && i % 4 == 0) {
                 currentYPosition += getState().pixelSize
                 currentXPosition = getState().aimPosition.x
@@ -115,61 +100,14 @@ class SandSimViewModel : ViewModel() {
                     currentXPosition, currentYPosition
                 )
             ))
-            possiblePositions.add(newPixel)
+            generatedPixels.add(newPixel)
 
             currentXPosition += getState().pixelSize
         }
 
-
-        return possiblePositions.shuffled(Random(Instant.now().toEpochMilli())).take(5)
-    }
-
-    private fun createPixels(pixelSize: Float, pixelQuantity: Int = 5): List<PixelData> {
-        return listOf(
-            // Center pixel
-            PixelData(
-                position = Offset(
-                    x = getState().aimPosition.x, y = getState().aimPosition.y
-                )
-            ),
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x + pixelSize,
-//                    y = getState().aimPosition.y
-//                )
-//            ),
-//            // Right * 2 pixel
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x + (pixelSize * 2),
-//                    y = getState().aimPosition.y
-//                )
-//            ),
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x - pixelSize,
-//                    y = getState().aimPosition.y
-//                )
-//            ),
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x - (pixelSize * 2),
-//                    y = getState().aimPosition.y
-//                )
-//            ),
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x, y = getState().aimPosition.y + (pixelSize * 2)
-//                )
-//            ),
-//            PixelData(
-//                position = Offset(
-//                    x = getState().aimPosition.x, y = getState().aimPosition.y - (pixelSize * 2)
-//                )
-//            )
-        ).shuffled(Random(Instant.now().toEpochMilli())).take(1)
-
-
+        return generatedPixels.shuffled(
+            Random(Instant.now().toEpochMilli())
+        ).take(quantity)
     }
 
     private fun updatePixelPosition(pixel: PixelData): PixelData {
@@ -211,11 +149,9 @@ class SandSimViewModel : ViewModel() {
         }
     }
 
-    private fun hasWallOnTheRight(position: Offset) =
-        position.x + getState().pixelSize >= getState().size.width
+    private fun hasWallOnTheRight(position: Offset) = position.x >= getState().size.width
 
-    private fun hasWallOnTheLeft(position: Offset) =
-        position.x - getState().pixelSize <= getState().pixelSize
+    private fun hasWallOnTheLeft(position: Offset) = position.x - getState().pixelSize < 0
 
     private fun updatePixelsOnState(
         pixelsOnFinalPosition: MutableList<PixelData>,
@@ -284,6 +220,12 @@ class SandSimViewModel : ViewModel() {
         ) || hasWallOnTheRight(newPosition) && hasPixelOnTop || hasWallOnTheLeft(newPosition) && hasPixelOnTop)
     }
 
+    private fun isBellowAPixelOnFinalPosition(
+        pixelPosition: Offset
+    ) =
+        getState().pixelsOnFinalPosition.any { it.position.x == pixelPosition.x && it.position.y < pixelPosition.y }
+
+
     private fun hasPixelOnTopRight(
         pixelPosition: Offset
     ) =
@@ -329,9 +271,9 @@ class SandSimViewModel : ViewModel() {
     }
 
     fun initializePixels(size: Size, center: Offset) {
-        if (getState().size.width == 0f) {
+        if (!getState().isInitialized) {
             val newState = CanvasState(
-                size = size, aimPosition = Offset(x = center.x, y = 0f)
+                size = size, aimPosition = Offset(x = center.x, y = 0f), isInitialized = true
             )
             updateState(newState)
         }
@@ -377,4 +319,5 @@ class SandSimViewModel : ViewModel() {
         val newState = getState().copy(isSimulationPaused = !getState().isSimulationPaused)
         updateState(newState)
     }
+
 }
