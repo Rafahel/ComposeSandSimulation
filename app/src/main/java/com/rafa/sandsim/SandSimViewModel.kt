@@ -3,7 +3,6 @@ package com.rafa.sandsim
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.util.fastDistinctBy
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.time.Instant
 import java.util.Random
+import java.util.TreeSet
 
 class SandSimViewModel : ViewModel() {
     private val _state = MutableStateFlow(CanvasState())
@@ -19,53 +19,128 @@ class SandSimViewModel : ViewModel() {
     private var updateJob: Job? = null
     val sandColors = listOf(Color(0xFFFFEC98), Color(0xFFF1C173), Color(0xFFF89E0C))
 
-
     fun update() {
-        if (getState().isSimulationPaused) {
-            return
-        }
         val startTime = Instant.now().toEpochMilli()
         var pixels = getState().pixels.toMutableList()
-        val pixelsOnFinalPosition: MutableList<PixelData> =
-            getState().pixelsOnFinalPosition.toMutableList()
-        if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
-            val newPixelsList = spawnPixels()
-            if (newPixelsList.none { getState().isBellowAPixelOnFinalPosition(it.position) }) {
-                pixels.addAll(newPixelsList)
+        if (!getState().isSimulationPaused) {
+
+            if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
+                val newPixelsList = spawnPixels()
+                if (newPixelsList.none { getState().isBellowAPixelOnFinalPosition(it.position) }) {
+                    pixels.addAll(newPixelsList)
+                }
+
+                lastGeneratedPixelTime = Instant.now().toEpochMilli()
             }
 
-            lastGeneratedPixelTime = Instant.now().toEpochMilli()
-        }
+            pixels = pixels.distinct().toMutableList()
 
-        pixels = pixels.distinct().toMutableList()
-
-        pixels.forEach { pixel ->
-            val updatedPixel = updatePixelPosition(pixel)
-            pixels[pixels.indexOf(pixel)] = updatedPixel
+            pixels.forEach { pixel ->
+                val updatedPixel = updatePixelPosition(pixel)
+                pixels[pixels.indexOf(pixel)] = updatedPixel
+            }
+            pixels.removeAll { getState().isBellowAPixelOnFinalPosition(it.position) }
         }
-        pixels.removeAll { getState().isBellowAPixelOnFinalPosition(it.position) }
-        updatePixelsOnState(pixelsOnFinalPosition, pixels, startTime)
+        updatePixelsOnState(pixels, startTime)
     }
 
+    private fun updatePixelsOnState(
+        pixels: MutableList<PixelData>,
+        startTime: Long
+    ) {
+        val pixelsOnFinalPosition = getState().pixelsOnFinalPosition
+        pixelsOnFinalPosition.addAll(pixels.filter { it.hasReachFinalPosition })
+        val nonCollidable =
+            pixelsOnFinalPosition.filter { !getState().canCollideWithOtherPixels(it.position) }
+        val updatedPixelsOnLastPosition =
+            pixelsOnFinalPosition.apply { removeAll(nonCollidable.toSet()) }
+                .distinctBy { it.position }
+
+        val updatedPixels =
+            pixels.filter { !it.hasReachFinalPosition }.toSet().distinctBy{ it.position }
+        val newState = getState().copy(
+            pixels = TreeSet(PixelDataComparator).apply { addAll(updatedPixels) },
+            pixelsOnFinalPosition = TreeSet(PixelDataComparator).apply {
+                addAll(
+                    updatedPixelsOnLastPosition
+                )
+            },
+            notCollidablePixels = emptyList(),
+            updateTimeInMs = Instant.now().toEpochMilli() - startTime
+        )
+        updateState(newState)
+    }
 
     private fun spawnPixels(): List<PixelData> {
         val positions = mutableListOf<Offset>().apply {
             // Single top position
-            add(Offset(getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 4 ))
+            add(
+                Offset(
+                    getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 4
+                )
+            )
             // Double above middle position
-            add(Offset(getState().aimPosition.x - getState().pixelSize, getState().aimPosition.y - getState().pixelSize * 3 ))
-            add(Offset(getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 3 ))
-            add(Offset(getState().aimPosition.x + getState().pixelSize, getState().aimPosition.y - getState().pixelSize * 3 ))
+            add(
+                Offset(
+                    getState().aimPosition.x - getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize * 3
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 3
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x + getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize * 3
+                )
+            )
             // Quad middle
-            add(Offset(getState().aimPosition.x - getState().pixelSize * 2, getState().aimPosition.y - getState().pixelSize * 2))
-            add(Offset(getState().aimPosition.x - getState().pixelSize, getState().aimPosition.y - getState().pixelSize * 2))
-            add(Offset(getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 2))
-            add(Offset(getState().aimPosition.x + getState().pixelSize, getState().aimPosition.y - getState().pixelSize * 2))
-            add(Offset(getState().aimPosition.x + getState().pixelSize * 2, getState().aimPosition.y - getState().pixelSize * 2))
+            add(
+                Offset(
+                    getState().aimPosition.x - getState().pixelSize * 2,
+                    getState().aimPosition.y - getState().pixelSize * 2
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x - getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize * 2
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize * 2
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x + getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize * 2
+                )
+            )
+            add(
+                Offset(
+                    getState().aimPosition.x + getState().pixelSize * 2,
+                    getState().aimPosition.y - getState().pixelSize * 2
+                )
+            )
             // triple bottom
-            add(Offset(getState().aimPosition.x - getState().pixelSize, getState().aimPosition.y - getState().pixelSize))
-            add(Offset(getState().aimPosition.x , getState().aimPosition.y - getState().pixelSize))
-            add(Offset(getState().aimPosition.x + getState().pixelSize, getState().aimPosition.y - getState().pixelSize ))
+            add(
+                Offset(
+                    getState().aimPosition.x - getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize
+                )
+            )
+            add(Offset(getState().aimPosition.x, getState().aimPosition.y - getState().pixelSize))
+            add(
+                Offset(
+                    getState().aimPosition.x + getState().pixelSize,
+                    getState().aimPosition.y - getState().pixelSize
+                )
+            )
             // SIngle bottom
             add(Offset(getState().aimPosition.x, getState().aimPosition.y))
         }
@@ -106,34 +181,11 @@ class SandSimViewModel : ViewModel() {
                     hasReachFinalPosition = false
 
                 )
-
             }
         }
     }
 
-    private fun updatePixelsOnState(
-        pixelsOnFinalPosition: MutableList<PixelData>,
-        pixels: MutableList<PixelData>,
-        startTime: Long
-    ) {
-        pixelsOnFinalPosition.addAll(pixels.filter { it.hasReachFinalPosition })
-        val nonCollidable =
-            pixelsOnFinalPosition.filter { !getState().canCollideWithOtherPixels(it.position) }
-        val updatedNonCollidablePixels =
-            (getState().notCollidablePixels + nonCollidable.map { it.copy(canCollideWIthOtherPixels = false) }).fastDistinctBy { it.position }
-        val updatedPixelsOnLastPosition =
-            pixelsOnFinalPosition.fastDistinctBy { it.position }.toMutableList()
-                .apply { removeAll(nonCollidable) }
-        val updatedPixels =
-            pixels.filter { !it.hasReachFinalPosition }.toList().fastDistinctBy { it.position }
-        val newState = getState().copy(
-            pixels = updatedPixels,
-            pixelsOnFinalPosition = updatedPixelsOnLastPosition,
-            notCollidablePixels = updatedNonCollidablePixels,
-            fps = getCurrentFps(startTime)
-        )
-        updateState(newState)
-    }
+
 
     private fun slipSideways(pixelPosition: Offset): Float? {
         val collidingPixel = getState().getCollidingPixel(pixelPosition)!!
@@ -172,32 +224,28 @@ class SandSimViewModel : ViewModel() {
         }
     }
 
-    private fun getCurrentFps(startTime: Long): Float {
-        val frameTimeS = Instant.now().toEpochMilli() - startTime
-        val fps = 1000f / frameTimeS
-        return fps
-    }
-
     fun initializePixels(size: Size, center: Offset) {
         if (!getState().isInitialized) {
             val newState = CanvasState(
-                size = size, aimPosition = Offset(x = center.x, y = 0f), isInitialized = true
+                size = size,
+                aimPosition = Offset(x = center.x, y = getState().pixelSize * 2),
+                isInitialized = true,
+                showDebugInfo = getState().showDebugInfo,
+                useDebugColors = getState().useDebugColors
             )
             updateState(newState)
         }
     }
 
-    fun makeDivisibleBy10(number: Float): Float {
-        val remainder = number % 10
+    private fun makeDivisibleByPixelSize(number: Float): Float {
+        val remainder = number % getState().pixelSize
 
-        // Handle zero and multiples of 10 directly
         if (remainder == 0f) {
             return number
         }
 
-        // Handle positive and negative remainders efficiently
-        val adjustment = if (remainder > 5) {
-            10 - remainder
+        val adjustment = if (remainder > getState().pixelSize/2) {
+            getState().pixelSize - remainder
         } else {
             -remainder
         }
@@ -206,8 +254,8 @@ class SandSimViewModel : ViewModel() {
     }
 
     fun updateDragValues(offset: Offset) {
-        val newOffsetX = makeDivisibleBy10(offset.x)
-        val newOffsetY = makeDivisibleBy10(offset.y)
+        val newOffsetX = makeDivisibleByPixelSize(offset.x)
+        val newOffsetY = makeDivisibleByPixelSize(offset.y)
         val newStates = getState().copy(aimPosition = Offset(newOffsetX, newOffsetY))
         updateState(newStates)
     }
@@ -219,7 +267,9 @@ class SandSimViewModel : ViewModel() {
     private fun getState() = _state.value
     fun resetCanvas() {
         updateJob?.cancel()
-        val newState = CanvasState()
+        val newState = CanvasState(
+            useDebugColors = getState().useDebugColors, showDebugInfo = getState().showDebugInfo
+        )
         updateState(newState)
     }
 
@@ -228,9 +278,13 @@ class SandSimViewModel : ViewModel() {
         updateState(newState)
     }
 
-    fun drawPixelFloor() {
+    fun useDebugColors() {
         val newState = getState().copy(useDebugColors = !getState().useDebugColors)
         updateState(newState)
     }
 
+    fun showDebugInfo() {
+        val newState = getState().copy(showDebugInfo = !getState().showDebugInfo)
+        updateState(newState)
+    }
 }
