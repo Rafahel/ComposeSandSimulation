@@ -1,7 +1,8 @@
-package com.rafa.sandsim
+package com.rafa.sandsim.sandscreen
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import com.rafa.sandsim.ui.theme.topSandColor
 
 data class PixelData(
     val position: Offset,
@@ -16,7 +17,7 @@ data class PixelData(
         } else if (hasReachFinalPosition) {
             Color.Red
         } else {
-            Color.Yellow
+            topSandColor
         }
     }
 }

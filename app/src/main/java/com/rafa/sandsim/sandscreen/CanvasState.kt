@@ -1,4 +1,4 @@
-package com.rafa.sandsim
+package com.rafa.sandsim.sandscreen
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -18,7 +18,6 @@ object PixelDataComparator : Comparator<PixelData> {
 data class CanvasState(
     val pixels: TreeSet<PixelData> = TreeSet(PixelDataComparator),
     val pixelsOnFinalPosition: TreeSet<PixelData> = TreeSet(PixelDataComparator),
-    val notCollidablePixels: List<PixelData> = emptyList(),
     val size: Size = Size(1f, 1f),
     val pixelSize: Float = 10f,
     val aimPosition: Offset = Offset(0f, pixelSize * 10),
@@ -50,7 +49,7 @@ data class CanvasState(
     ) =
         pixelsOnFinalPosition.any { it.position.x == (pixelPosition.x + pixelSize) && it.position.y <= pixelPosition.y - pixelSize }
 
-    fun hasPixelOnTopLeft(
+    private fun hasPixelOnTopLeft(
         pixelPosition: Offset
     ) =
         pixelsOnFinalPosition.any { it.position.x == (pixelPosition.x - pixelSize) && it.position.y <= pixelPosition.y - pixelSize }

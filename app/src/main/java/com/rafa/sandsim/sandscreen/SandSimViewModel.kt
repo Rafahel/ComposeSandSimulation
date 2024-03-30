@@ -1,9 +1,11 @@
-package com.rafa.sandsim
+package com.rafa.sandsim.sandscreen
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
+import com.rafa.sandsim.ui.theme.bottomSandColor
+import com.rafa.sandsim.ui.theme.middleSandColor
+import com.rafa.sandsim.ui.theme.topSandColor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +19,7 @@ class SandSimViewModel : ViewModel() {
     val state = _state.asStateFlow()
     private var lastGeneratedPixelTime = Instant.now().toEpochMilli()
     private var updateJob: Job? = null
-    val sandColors = listOf(Color(0xFFFFEC98), Color(0xFFF1C173), Color(0xFFF89E0C))
+    val sandColors = listOf(topSandColor, middleSandColor, bottomSandColor)
 
     fun update() {
         val startTime = Instant.now().toEpochMilli()
@@ -48,24 +50,24 @@ class SandSimViewModel : ViewModel() {
         pixels: MutableList<PixelData>,
         startTime: Long
     ) {
-        val pixelsOnFinalPosition = getState().pixelsOnFinalPosition
+        val state = getState()
+        val pixelsOnFinalPosition = state.pixelsOnFinalPosition
         pixelsOnFinalPosition.addAll(pixels.filter { it.hasReachFinalPosition })
-        val nonCollidable =
-            pixelsOnFinalPosition.filter { !getState().canCollideWithOtherPixels(it.position) }
+        val nonCollidingPixels =
+            pixelsOnFinalPosition.filter { !state.canCollideWithOtherPixels(it.position) }
         val updatedPixelsOnLastPosition =
-            pixelsOnFinalPosition.apply { removeAll(nonCollidable.toSet()) }
+            pixelsOnFinalPosition.apply { removeAll(nonCollidingPixels.toSet()) }
                 .distinctBy { it.position }
-
         val updatedPixels =
             pixels.filter { !it.hasReachFinalPosition }.toSet().distinctBy{ it.position }
-        val newState = getState().copy(
+
+        val newState = state.copy(
             pixels = TreeSet(PixelDataComparator).apply { addAll(updatedPixels) },
             pixelsOnFinalPosition = TreeSet(PixelDataComparator).apply {
                 addAll(
                     updatedPixelsOnLastPosition
                 )
             },
-            notCollidablePixels = emptyList(),
             updateTimeInMs = Instant.now().toEpochMilli() - startTime
         )
         updateState(newState)
