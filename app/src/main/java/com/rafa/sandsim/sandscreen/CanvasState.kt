@@ -26,6 +26,7 @@ data class CanvasState(
     val isInitialized: Boolean = false,
     val useDebugColors: Boolean = false,
     val showDebugInfo: Boolean = false,
+    val isTouchingTheScreen: Boolean = false
 ) {
 
     fun getCurrentPixels() = getAllPixels().size

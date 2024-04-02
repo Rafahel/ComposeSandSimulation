@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import com.rafa.sandsim.ui.theme.bottomSandColor
 import com.rafa.sandsim.ui.theme.middleSandColor
 import com.rafa.sandsim.ui.theme.topSandColor
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -18,7 +17,6 @@ class SandSimViewModel : ViewModel() {
     private val _state = MutableStateFlow(CanvasState())
     val state = _state.asStateFlow()
     private var lastGeneratedPixelTime = Instant.now().toEpochMilli()
-    private var updateJob: Job? = null
     val sandColors = listOf(topSandColor, middleSandColor, bottomSandColor)
 
     fun update() {
@@ -26,7 +24,7 @@ class SandSimViewModel : ViewModel() {
         var pixels = getState().pixels.toMutableList()
         if (!getState().isSimulationPaused) {
 
-            if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75) {
+            if ((Instant.now().toEpochMilli() - lastGeneratedPixelTime) > 75 && getState().isTouchingTheScreen) {
                 val newPixelsList = spawnPixels()
                 if (newPixelsList.none { getState().isBellowAPixelOnFinalPosition(it.position) }) {
                     pixels.addAll(newPixelsList)
@@ -268,7 +266,6 @@ class SandSimViewModel : ViewModel() {
 
     private fun getState() = _state.value
     fun resetCanvas() {
-        updateJob?.cancel()
         val newState = CanvasState(
             useDebugColors = getState().useDebugColors, showDebugInfo = getState().showDebugInfo
         )
@@ -287,6 +284,13 @@ class SandSimViewModel : ViewModel() {
 
     fun showDebugInfo() {
         val newState = getState().copy(showDebugInfo = !getState().showDebugInfo)
+        updateState(newState)
+    }
+
+    fun updateIsTouchingTheScreen(isTouching: Boolean) {
+        val state = getState()
+        if (state.isTouchingTheScreen == isTouching) return
+        val newState = state.copy(isTouchingTheScreen = isTouching)
         updateState(newState)
     }
 }
