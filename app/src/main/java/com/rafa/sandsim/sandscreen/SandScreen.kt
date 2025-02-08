@@ -29,11 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -101,6 +103,14 @@ fun DrawScreen(
     var drawingTime by remember {
         mutableStateOf("")
     }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameMillis {
+                onCurrentDrawFinished.invoke(0)
+            }
+        }
+    }
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -140,7 +150,7 @@ fun DrawScreen(
                         onInitializePixels.invoke(size, position)
                     }, colors = colors, postDrawingTimes = {
                         drawingTime = it
-                    }, onCurrentDrawFinished = onCurrentDrawFinished, updateIsTouching = {
+                    }, onCurrentDrawFinished = {} , updateIsTouching = {
                         updateIsTouching.invoke(it)
                     })
                     if (state.showDebugInfo) {
