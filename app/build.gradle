@@ -27,15 +27,6 @@ android {
         }
     }
 
-    flavorDimensions += "version"
-
-
-    productFlavors {
-        create("anotherFlavor") {
-            dimension = "version"
-            applicationIdSuffix = ".another"
-        }
-    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
