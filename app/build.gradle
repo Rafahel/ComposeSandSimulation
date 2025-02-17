@@ -34,6 +34,9 @@ android {
             dimension = "version"
             applicationIdSuffix = ".abcflavor"
         }
+         create("main") {
+            dimension = "version"
+        }
     }
 
 
