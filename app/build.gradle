@@ -34,7 +34,6 @@ android {
         create("anotherFlavor") {
             dimension = "version"
             applicationIdSuffix = ".another"
-            versionNameSuffix = "-another"
         }
     }
     compileOptions {
