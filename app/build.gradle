@@ -27,6 +27,16 @@ android {
         }
     }
 
+    flavorDimensions += "version"
+
+    productFlavors {
+        create("abc") {
+            dimension = "version"
+            applicationIdSuffix = ".abcflavor"
+        }
+    }
+
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
