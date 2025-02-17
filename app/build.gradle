@@ -27,6 +27,9 @@ android {
         }
     }
 
+    flavorDimensions += "version"
+
+
     productFlavors {
         create("anotherFlavor") {
             dimension = "version"
